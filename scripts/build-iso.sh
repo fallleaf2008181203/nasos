@@ -142,8 +142,7 @@ make_squashfs() {
   rm -f "$ISO_DIR/live/filesystem.squashfs"
 
   mksquashfs "$ROOTFS" "$ISO_DIR/live/filesystem.squashfs" \
-    -comp xz -Xbcj x86 -b 1M -noappend -processors 0 \
-    -e boot \
+    -comp xz -Xbcj x86 -b 1M -noappend \
     || die "mksquashfs 失败"
 
   log "squashfs: $(du -sh "$ISO_DIR/live/filesystem.squashfs" | cut -f1)"
