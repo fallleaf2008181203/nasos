@@ -1,0 +1,5 @@
+# 全部文本文件强制 LF —— shell 脚本带 CRLF 会在 Linux 构建时炸掉
+* text=lf eol=lf
+*.png binary
+*.jpg binary
+*.iso binary
