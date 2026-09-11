@@ -1,0 +1,51 @@
+# =============================================================================
+#  NasOS ISO 构建环境
+#  用途: 在任何装有 Docker 的机器 (Linux / macOS / Windows+Docker Desktop)
+#        上一键构建 NasOS ISO，无需在本机安装 debootstrap / xorriso 等工具。
+#
+#  用法:
+#    docker build -f Dockerfile.build -t nasos-builder .
+#    docker run --rm --privileged -v "$PWD/out:/nasos/out" nasos-builder
+#
+#  更简单:  make iso
+# =============================================================================
+FROM debian:bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8
+
+# 构建 ISO 所需的全部工具链
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        debootstrap \
+        xorriso \
+        squashfs-tools \
+        mtools \
+        dosfstools \
+        isolinux \
+        syslinux-common \
+        grub-common \
+        grub-pc-bin \
+        grub-efi-amd64-bin \
+        grub-efi-arm64-bin \
+        qemu-utils \
+        curl \
+        ca-certificates \
+        sudo \
+        bash \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /nasos
+COPY . /nasos
+
+RUN chmod +x /nasos/scripts/*.sh \
+    && chmod +x /nasos/rootfs/usr/local/bin/* /nasos/rootfs/usr/local/sbin/* \
+    && chmod +x /nasos/rootfs/opt/nasos/backend/main.py
+
+# 默认构建 x86_64 (Intel / AMD 通用)
+# 可通过 -e ARCH=arm64 覆盖
+ENV ARCH=amd64
+ENV SUITE=bookworm
+
+VOLUME ["/nasos/out"]
+
+CMD ["/nasos/scripts/build-iso.sh"]
