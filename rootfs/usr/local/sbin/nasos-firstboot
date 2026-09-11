@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# =============================================================================
+#  NasOS 首次启动初始化
+#  由 systemd (nasos-firstboot.service) 在第一次开机时自动执行一次。
+# =============================================================================
+set -euo pipefail
+
+CONF_DIR=/etc/nasos
+DATA_DIR=/opt/nasos/data
+MARKER="$DATA_DIR/.initialized"
+
+log() { echo -e "\033[1;36m[firstboot]\033[0m $*"; }
+
+[ -f "$MARKER" ] && { log "已初始化，跳过"; exit 0; }
+
+log "开始首次启动初始化..."
+
+mkdir -p "$CONF_DIR" "$DATA_DIR" /var/log/nasos
+
+# ---- 1. 生成 SSH 主机密钥 ----
+if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then
+  log "生成 SSH 主机密钥..."
+  ssh-keygen -A >/dev/null 2>&1 || true
+fi
+
+# ---- 2. 生成新的 machine-id (确保克隆/镜像部署后唯一) ----
+if command -v systemd-machine-id-setup >/dev/null; then
+  systemd-machine-id-setup >/dev/null 2>&1 || true
+fi
+
+# ---- 3. 默认配置文件 ----
+if [ ! -f "$CONF_DIR/shares.json" ]; then
+  log "生成默认共享配置..."
+  cat > "$CONF_DIR/shares.json" <<'EOF'
+[
+  {
+    "name": "data",
+    "path": "/mnt/pool0/data",
+    "proto": ["SMB", "NFS"],
+    "users": "所有用户",
+    "rw": true,
+    "status": "启用",
+    "size": "—"
+  }
+]
+EOF
+fi
+
+if [ ! -f "$CONF_DIR/pools.json" ]; then
+  echo "[]" > "$CONF_DIR/pools.json"
+fi
+
+if [ ! -f "$CONF_DIR/apps.json" ]; then
+  log "生成应用中心目录..."
+  cat > "$CONF_DIR/apps.json" <<'EOF'
+{
+  "installed": [],
+  "available": [
+    {"id":"workbuddy","name":"WorkBuddy","cat":"AI 助手","icon":"W","color":"#a78bfa",
+     "desc":"AI 工作助手入口（云端服务，需账号与网络；镜像内为入口，不含服务端）","status":"available","version":"—"},
+    {"id":"ollama","name":"Ollama 本地大模型","cat":"AI","icon":"O","color":"#7c3aed",
+     "desc":"本地运行开源大模型，数据不出内网","status":"available","version":"latest"},
+    {"id":"jellyfin","name":"Jellyfin","cat":"影音","icon":"J","color":"#00a4dc",
+     "desc":"开源影音服务器，支持硬件转码","status":"available","version":"10.8"},
+    {"id":"nextcloud","name":"Nextcloud","cat":"云盘","icon":"N","color":"#0082c9",
+     "desc":"私有云盘与在线协作","status":"available","version":"28"},
+    {"id":"immich","name":"Immich 相册","cat":"相册","icon":"P","color":"#7d5fff",
+     "desc":"AI 照片管理与人脸识别","status":"available","version":"1.9"},
+    {"id":"qbittorrent","name":"qBittorrent","cat":"下载","icon":"Q","color":"#3fa9f5",
+     "desc":"BT/PT 下载工具","status":"available","version":"4.6"},
+    {"id":"homeassistant","name":"Home Assistant","cat":"智能家居","icon":"H","color":"#41bdf5",
+     "desc":"开源智能家居中枢","status":"available","version":"2024.1"},
+    {"id":"portainer","name":"Portainer","cat":"运维","icon":"⚓","color":"#13bef9",
+     "desc":"Docker 容器可视化管理","status":"available","version":"2.19"}
+  ]
+}
+EOF
+fi
+
+# ---- 4. 创建默认数据目录 ----
+mkdir -p /mnt/pool0/data /mnt/pool0/homes
+chmod 755 /mnt/pool0 2>/dev/null || true
+
+# ---- 5. 创建 admin 用户 (若不存在) ----
+if ! id -u admin >/dev/null 2>&1; then
+  log "创建默认管理用户 admin..."
+  useradd -m -d /mnt/pool0/homes/admin -s /bin/bash -G sudo,docker admin 2>/dev/null || \
+    useradd -m -s /bin/bash admin 2>/dev/null || true
+  echo 'admin:nasos' | chpasswd 2>/dev/null || true
+  # 加入 samba
+  (echo "nasos"; echo "nasos") | smbpasswd -s -a admin 2>/dev/null || true
+fi
+
+# ---- 6. 确保服务目录权限 ----
+chown -R root:root /opt/nasos 2>/dev/null || true
+chmod 755 /opt/nasos/backend/main.py 2>/dev/null || true
+
+# ---- 7. 标记完成 ----
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$MARKER"
+log "首次启动初始化完成"
+exit 0
