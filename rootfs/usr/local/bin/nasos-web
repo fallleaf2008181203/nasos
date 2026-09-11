@@ -1,0 +1,19 @@
+#!/bin/bash
+# =============================================================================
+#  NasOS Web 管理端启动器 (systemd nasos-web.service 调用)
+# =============================================================================
+set -e
+
+WEB_DIR="${NASOS_WEB:-/opt/nasos/web}"
+CONF_DIR="${NASOS_CONF:-/etc/nasos}"
+PORT="${NASOS_PORT:-8080}"
+
+mkdir -p "$CONF_DIR"
+
+# uvicorn 直接挂载 FastAPI 应用
+exec python3 -m uvicorn main:app \
+    --host 0.0.0.0 \
+    --port "$PORT" \
+    --app-dir /opt/nasos/backend \
+    --workers 2 \
+    --no-access-log
