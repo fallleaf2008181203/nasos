@@ -124,7 +124,7 @@ install_nas_stack() {
     iproute2 iputils-ping net-tools \
     openssh-server \
     network-manager \
-    ntp chrony \
+    chrony \
     lm-sensors \
     htop iotop iftop sysstat \
     curl wget vim-tiny less ncdu tree unzip zip \
