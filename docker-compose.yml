@@ -1,0 +1,49 @@
+# =============================================================================
+#  NasOS 体验版 - 无需构建 ISO，5 分钟跑起来
+#
+#  适合: 想先看看 NasOS 管理界面长什么样 / 在现有 Linux 服务器上体验
+#  用法:
+#    docker compose up -d
+#    浏览器打开  http://localhost:8080
+#
+#  说明: 体验版运行在容器内，只能看到容器视角的磁盘/网络，
+#        完整功能需要安装 ISO 到物理机或虚拟机。
+# =============================================================================
+services:
+
+  # ---------- NasOS 管理端 (Web + API) ----------
+  nasos-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.demo
+    container_name: nasos-web
+    hostname: nasos
+    privileged: true          # 体验版需要读取磁盘/SMART信息
+    ports:
+      - "8080:8080"
+    volumes:
+      - nasos-data:/opt/nasos/data
+      - nasos-conf:/etc/nasos
+      # 想看真实宿主机磁盘，取消下行注释:
+      # - /:/host:ro
+    environment:
+      - NASOS_WEB=/opt/nasos/web
+      - NASOS_CONF=/etc/nasos
+    restart: unless-stopped
+
+  # ---------- 应用中心示例: Jellyfin ----------
+  # 取消注释即可在体验版中试装一个真实应用
+  # jellyfin:
+  #   image: jellyfin/jellyfin:latest
+  #   container_name: nasos-jellyfin
+  #   ports:
+  #     - "8096:8096"
+  #   volumes:
+  #     - jellyfin-config:/config
+  #     - nasos-data:/media
+  #   restart: unless-stopped
+
+volumes:
+  nasos-data:
+  nasos-conf:
+  # jellyfin-config:
