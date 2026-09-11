@@ -104,7 +104,7 @@ install_nas_stack() {
 
   # ---- 存储管理 ----
   apt-get install -y -qq \
-    mdadm lvm2 parted gptfdisk util-linux \
+    mdadm lvm2 parted gdisk util-linux \
     e2fsprogs xfsprogs btrfs-progs ntfs-3g exfatprogs dosfstools \
     smartmontools hdparm nvme-cli sg3-utils \
     cryptsetup \
