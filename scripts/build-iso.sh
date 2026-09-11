@@ -62,7 +62,7 @@ check_deps() {
     apt-get update -qq
     apt-get install -y -qq \
       debootstrap xorriso squashfs-tools grub-common grub-pc-bin \
-      grub-efi-bin "grub-efi-${ARCH}-bin" mtools dosfstools \
+      grub-common grub-pc-bin "grub-efi-${ARCH}-bin" mtools dosfstools \
       isolinux syslinux-common qemu-utils
   fi
 
@@ -178,7 +178,7 @@ make_bootloader() {
     -O "$EFI_TARGET" \
     -o "$ISO_DIR/EFI/BOOT/$EFI_BOOT_FILE" \
     -p "/boot/grub" \
-    --compress=xz \
+    \
     part_gpt part_msdos fat ext2 normal configfile linux search search_fs_uuid \
     iso9660 loopback echo cat test true help gfxterm all_video video efi_gop efi_uga
 
@@ -189,7 +189,7 @@ make_bootloader() {
       -O i386-pc \
       -o "$ISO_DIR/boot/grub/i386-pc/eltorito.img" \
       -p "/boot/grub" \
-      --compress=xz \
+      \
       biosdisk part_msdos part_gpt fat ext2 iso9660 normal configfile linux search \
       echo cat test true help gfxterm all_video video vbe vga 2>/dev/null || \
       warn "BIOS GRUB 镜像生成失败 (isolinux 仍可用)"
@@ -272,7 +272,7 @@ make_iso() {
     -no-emul-boot -boot-load-size 4 -boot-info-table \
     -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
     -eltorito-alt-boot \
-    -e EFI/BOOT/BOOTX64.EFI \
+    -e EFI/BOOT/bootx64.efi \
     -no-emul-boot -isohybrid-gpt-basdat \
     -output "$ISO_PATH" \
     "$ISO_DIR" 2>/dev/null \
@@ -283,7 +283,7 @@ make_iso() {
     -eltorito-boot isolinux/isolinux.bin \
     -eltorito-catalog isolinux/boot.cat \
     -no-emul-boot -boot-load-size 4 -boot-info-table \
-    -eltorito-alt-boot -e EFI/BOOT/BOOTX64.EFI -no-emul-boot \
+    -eltorito-alt-boot -e EFI/BOOT/bootx64.efi -no-emul-boot \
     -output "$ISO_PATH" \
     "$ISO_DIR" \
   || die "ISO 生成失败"
