@@ -1,0 +1,32 @@
+# =============================================================================
+#  NasOS 体验版镜像 (docker compose 用)
+#  Debian + Python + FastAPI + NasOS Web 前端
+# =============================================================================
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-fastapi python3-uvicorn python3-pydantic \
+        python3-psutil python3-yaml \
+        smartmontools util-linux mount udev \
+        samba nfs-kernel-server \
+        curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY rootfs/opt/nasos/web    /opt/nasos/web
+COPY rootfs/opt/nasos/backend /opt/nasos/backend
+COPY rootfs/usr/local/bin/nasos-web /usr/local/bin/nasos-web
+COPY rootfs/usr/local/sbin/nasos-firstboot /usr/local/sbin/nasos-firstboot
+
+RUN chmod +x /usr/local/bin/nasos-web /usr/local/sbin/nasos-firstboot \
+    && mkdir -p /etc/nasos /opt/nasos/data /mnt/pool0/data /mnt/pool0/homes
+
+ENV NASOS_WEB=/opt/nasos/web
+ENV NASOS_CONF=/etc/nasos
+
+EXPOSE 8080
+
+# 首启初始化 + 启动 Web
+CMD ["/bin/bash", "-c", "/usr/local/sbin/nasos-firstboot || true; exec /usr/local/bin/nasos-web"]
