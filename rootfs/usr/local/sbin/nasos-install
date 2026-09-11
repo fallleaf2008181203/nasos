@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+# =============================================================================
+#  NasOS Installer - 把 Live 系统安装到本机磁盘
+#
+#  适用: 物理机 (Intel/AMD x86_64) 、VMware / VirtualBox / KVM / Hyper-V 虚拟机
+#  引导: 自动判断并安装 UEFI 或 Legacy BIOS 引导
+#
+#  用法:
+#    sudo nasos-install              # 交互式：列出磁盘让你选
+#    sudo nasos-install /dev/sda     # 直接指定目标磁盘
+#    sudo nasos-install /dev/sda --yes   # 免确认（自动化部署）
+# =============================================================================
+set -euo pipefail
+
+TARGET="${1:-}"
+AUTO="${2:-}"
+EFI_SIZE=512          # MiB
+SWAP_GB=4             # GB，设为 0 则不创建 swap
+
+C_RED='\033[1;31m'; C_GRN='\033[1;32m'; C_YEL='\033[1;33m'; C_CYA='\033[1;36m'; C_OFF='\033[0m'
+log()  { echo -e "${C_CYA}[NasOS]${C_OFF} $*"; }
+ok()   { echo -e "${C_GRN}[ OK ]${C_OFF} $*"; }
+warn() { echo -e "${C_YEL}[Warn]${C_OFF} $*"; }
+die()  { echo -e "${C_RED}[Fail]${C_OFF} $*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "请以 root 权限运行"
+
+# --------------------------------------------------------- 定位 live 镜像 --
+SQUASH=""
+for p in /run/live/medium/live/filesystem.squashfs \
+         /lib/live/mount/medium/live/filesystem.squashfs \
+         /cdrom/live/filesystem.squashfs \
+         /mnt/nasos/filesystem.squashfs; do
+  [ -f "$p" ] && { SQUASH="$p"; break; }
+done
+if [ -z "$SQUASH" ]; then
+  SQUASH="$(find / -maxdepth 6 -name 'filesystem.squashfs' -type f 2>/dev/null | head -1 || true)"
+fi
+[ -n "$SQUASH" ] || die "未找到 filesystem.squashfs，请确认在 NasOS Live 环境中运行"
+log "Live 系统镜像: $SQUASH"
+
+# ------------------------------------------------------------- 选择磁盘 ----
+list_disks() {
+  echo ""
+  printf "%-14s %-10s %-28s %s\n" "设备" "容量" "型号" "已有分区"
+  echo "---------------------------------------------------------------------------"
+  while read -r name size model; do
+    local parts
+    parts="$(lsblk -no NAME "/dev/$name" 2>/dev/null | grep -c "^.." || true)"
+    printf "%-14s %-10s %-28s %s\n" "/dev/$name" "$size" "${model:-未知}" "$parts"
+  done < <(lsblk -dno NAME,SIZE,MODEL 2>/dev/null | grep -E '^(sd|nvme|vd|hd)')
+  echo ""
+}
+
+if [ -z "$TARGET" ]; then
+  list_disks
+  read -r -p "请输入要安装的目标磁盘 (例如 /dev/sda): " TARGET
+fi
+[ -b "$TARGET" ] || die "$TARGET 不是有效的块设备"
+
+SIZE="$(lsblk -dno SIZE "$TARGET")"
+MODEL="$(lsblk -dno MODEL "$TARGET" 2>/dev/null || echo 未知)"
+log "目标磁盘: $TARGET ($SIZE, $MODEL)"
+
+# ------------------------------------------------------------- 确认 -------
+if [ "$AUTO" != "--yes" ]; then
+  echo ""
+  echo -e "${C_RED}警告: 将清空 $TARGET 上的全部数据，此操作不可恢复！${C_OFF}"
+  read -r -p "请输入 YES 确认继续: " CONFIRM
+  [ "$CONFIRM" = "YES" ] || die "已取消安装"
+fi
+
+# ------------------------------------------------------------- 卸载 -------
+log "卸载目标磁盘上的现有分区..."
+for p in $(lsblk -no NAME "$TARGET" | tail -n +2); do
+  umount -l "/dev/$p" 2>/dev/null || true
+done
+swapoff -a 2>/dev/null || true
+
+# ------------------------------------------------------------- 分区 -------
+log "创建 GPT 分区表..."
+wipefs -af "$TARGET" 2>/dev/null || true
+parted -s "$TARGET" mklabel gpt
+
+if [ -d /sys/firmware/efi ]; then
+  BOOT_MODE="uefi"
+  log "检测到 UEFI 固件，将创建 EFI 分区"
+  parted -s "$TARGET" mkpart ESP fat32 1MiB "${EFI_SIZE}MiB"
+  parted -s "$TARGET" set 1 esp on
+  if [ "$SWAP_GB" -gt 0 ]; then
+    parted -s "$TARGET" mkpart swap linux-swap "${EFI_SIZE}MiB" "$((EFI_SIZE + SWAP_GB * 1024))MiB"
+    parted -s "$TARGET" mkpart root ext4 "$((EFI_SIZE + SWAP_GB * 1024))MiB" 100%
+    SWAP_PART=2; ROOT_PART=3
+  else
+    parted -s "$TARGET" mkpart root ext4 "${EFI_SIZE}MiB" 100%
+    SWAP_PART=""; ROOT_PART=2
+  fi
+  EFI_PART=1
+else
+  BOOT_MODE="bios"
+  log "检测到 Legacy BIOS，将创建 BIOS 引导分区"
+  parted -s "$TARGET" mkpart bios 1MiB 2MiB
+  parted -s "$TARGET" set 1 bios_grub on
+  if [ "$SWAP_GB" -gt 0 ]; then
+    parted -s "$TARGET" mkpart swap linux-swap 2MiB "$((2 + SWAP_GB * 1024))MiB"
+    parted -s "$TARGET" mkpart root ext4 "$((2 + SWAP_GB * 1024))MiB" 100%
+    SWAP_PART=2; ROOT_PART=3
+  else
+    parted -s "$TARGET" mkpart root ext4 2MiB 100%
+    SWAP_PART=""; ROOT_PART=2
+  fi
+  EFI_PART=""
+fi
+partprobe "$TARGET" 2>/dev/null || true
+sleep 2
+
+# 分区设备名（NVMe 为 p1/p2，SATA 为 1/2）
+if [[ "$TARGET" == *nvme* ]] || [[ "$TARGET" == *mmcblk* ]] || [[ "$TARGET" == *loop* ]]; then
+  SUF="p"
+else
+  SUF=""
+fi
+ROOT_DEV="${TARGET}${SUF}${ROOT_PART}"
+[ -b "$ROOT_DEV" ] || die "根分区 $ROOT_DEV 未创建成功"
+[ -n "$SWAP_PART" ] && SWAP_DEV="${TARGET}${SUF}${SWAP_PART}" || SWAP_DEV=""
+[ -n "$EFI_PART" ]  && EFI_DEV="${TARGET}${SUF}${EFI_PART}"   || EFI_DEV=""
+
+# ------------------------------------------------------------- 格式化 -----
+log "格式化分区..."
+mkfs.ext4 -F -L nasos-root "$ROOT_DEV" >/dev/null
+[ -n "$SWAP_DEV" ] && { mkswap -L nasos-swap "$SWAP_DEV" >/dev/null; }
+if [ -n "$EFI_DEV" ]; then
+  mkfs.vfat -F32 -n NASOS-EFI "$EFI_DEV" >/dev/null
+fi
+ok "分区与格式化完成"
+
+# ------------------------------------------------------------- 挂载 -------
+MNT=/mnt/nasos-target
+mkdir -p "$MNT"
+mount "$ROOT_DEV" "$MNT"
+[ -n "$EFI_DEV" ] && { mkdir -p "$MNT/boot/efi"; mount "$EFI_DEV" "$MNT/boot/efi"; }
+ok "已挂载到 $MNT"
+
+# ------------------------------------------------------- 解压系统文件 -----
+log "复制系统文件 (约 2-5 分钟)..."
+if command -v unsquashfs >/dev/null 2>&1; then
+  unsquashfs -f -d "$MNT" "$SQUASH" >/dev/null 2>&1 || \
+    die "文件系统解压失败"
+else
+  mkdir -p /mnt/nasos-sq
+  mount -o loop,ro "$SQUASH" /mnt/nasos-sq
+  cp -a /mnt/nasos-sq/. "$MNT"/ || die "文件复制失败"
+  umount /mnt/nasos-sq
+fi
+ok "系统文件复制完成"
+
+# --------------------------------------------------------- 生成 fstab ----
+log "生成 fstab..."
+ROOT_UUID="$(blkid -s UUID -o value "$ROOT_DEV")"
+cat > "$MNT/etc/fstab" <<EOF
+# NasOS fstab (自动生成)
+UUID=$ROOT_UUID  /          ext4    defaults,noatime  0  1
+EOF
+if [ -n "$SWAP_DEV" ]; then
+  SWAP_UUID="$(blkid -s UUID -o value "$SWAP_DEV")"
+  echo "UUID=$SWAP_UUID  none       swap    sw                0  0" >> "$MNT/etc/fstab"
+fi
+if [ -n "$EFI_DEV" ]; then
+  EFI_UUID="$(blkid -s UUID -o value "$EFI_DEV")"
+  echo "UUID=$EFI_UUID  /boot/efi  vfat    umask=0077        0  1" >> "$MNT/etc/fstab"
+fi
+
+# -------------------------------------------------------- chroot 配置 ----
+log "配置目标系统..."
+mount -t proc  /proc "$MNT/proc" 2>/dev/null || true
+mount -t sysfs /sys  "$MNT/sys"  2>/dev/null || true
+mount --bind   /dev  "$MNT/dev"  2>/dev/null || true
+mount --bind   /dev/pts "$MNT/dev/pts" 2>/dev/null || true
+[ -d /sys/firmware/efi ] && { mkdir -p "$MNT/sys/firmware/efi"; mount --bind /sys/firmware/efi "$MNT/sys/firmware/efi" 2>/dev/null || true; }
+
+cat > "$MNT/tmp/install-chroot.sh" <<'CHROOT'
+#!/bin/bash
+set -e
+export DEBIAN_FRONTEND=noninteractive
+
+echo "nasos" > /etc/hostname
+sed -i 's/127.0.1.1.*/127.0.1.1\tnasos/' /etc/hosts 2>/dev/null || true
+
+# 移除 live 相关包，改为常规启动
+apt-get remove -y --purge live-boot live-boot-initramfs-tools live-config 2>/dev/null || true
+apt-get autoremove -y 2>/dev/null || true
+
+# 安装引导程序
+apt-get install -y -qq grub-pc grub-efi-amd64 2>/dev/null || \
+  apt-get install -y -qq grub-common 2>/dev/null || true
+
+update-initramfs -u -k all 2>/dev/null || true
+
+# 启用核心服务
+systemctl enable nasos-web.service 2>/dev/null || true
+systemctl enable smbd nmbd 2>/dev/null || true
+systemctl enable nfs-server 2>/dev/null || true
+systemctl enable ssh 2>/dev/null || true
+systemctl enable docker 2>/dev/null || true
+
+# 标记已完成首次初始化由系统接管
+rm -f /etc/systemd/system/multi-user.target.wants/live-config.service 2>/dev/null || true
+CHROOT
+chmod +x "$MNT/tmp/install-chroot.sh"
+chroot "$MNT" /bin/bash /tmp/install-chroot.sh || warn "chroot 配置部分失败，继续安装引导"
+rm -f "$MNT/tmp/install-chroot.sh"
+
+# ------------------------------------------------------------ 安装 GRUB --
+log "安装引导程序 ($BOOT_MODE)..."
+if [ "$BOOT_MODE" = "uefi" ]; then
+  chroot "$MNT" grub-install --target=x86_64-efi \
+      --efi-directory=/boot/efi --bootloader-id=NasOS --recheck || \
+    warn "UEFI GRUB 安装失败，尝试备用方案"
+  # 生成 fallback 引导项，兼容部分主板
+  mkdir -p "$MNT/boot/efi/EFI/BOOT"
+  cp "$MNT/boot/efi/EFI/NasOS/grubx64.efi" "$MNT/boot/efi/EFI/BOOT/bootx64.efi" 2>/dev/null || true
+else
+  chroot "$MNT" grub-install --target=i386-pc "$TARGET" --recheck || \
+    warn "BIOS GRUB 安装失败"
+fi
+chroot "$MNT" update-grub 2>/dev/null || warn "update-grub 失败（非致命）"
+ok "引导程序安装完成"
+
+# --------------------------------------------------------------- 收尾 ----
+for m in dev/pts dev sys proc; do umount -l "$MNT/$m" 2>/dev/null || true; done
+[ -n "$EFI_DEV" ] && umount -l "$MNT/boot/efi" 2>/dev/null || true
+umount -l "$MNT" 2>/dev/null || true
+
+log "=============================================="
+ok  "NasOS 安装完成！"
+log "  目标磁盘: $TARGET"
+log "  引导模式: $BOOT_MODE"
+log "  根分区:   $ROOT_DEV"
+log ""
+log "请移除安装介质并重启系统。"
+log "启动后访问 Web 管理端: http://<设备IP>:8080"
+log "默认账号: admin / nasos"
+log "=============================================="
