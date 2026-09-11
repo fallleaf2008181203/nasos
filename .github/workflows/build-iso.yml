@@ -1,0 +1,114 @@
+# =============================================================================
+#  NasOS ISO 云端自动构建
+#
+#  触发方式:
+#    1. 推送 tag:      git tag v0.1.0 && git push origin v0.1.0
+#    2. 手动触发:      GitHub 仓库 -> Actions -> Build NasOS ISO -> Run workflow
+#
+#  产物:
+#    - Actions Artifacts: nasos-0.1.0-amd64.iso (保留 30 天)
+#    - Release 附件:      推送 tag 时自动创建 Release 并附上 ISO
+#
+#  说明: 这是获取真实可启动 ISO 最省事的方式 —— 无需本机 Linux/Docker，
+#        推上去云端就帮你编好，直接从 Release 下载。
+# =============================================================================
+name: Build NasOS ISO
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: '目标架构'
+        required: true
+        default: 'amd64'
+        type: choice
+        options:
+          - amd64
+          - arm64
+      zfs:
+        description: '包含 ZFS 支持 (DKMS 编译, 较慢)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 读取版本号
+        id: ver
+        run: echo "version=$(tr -d ' \n' < VERSION)" >> $GITHUB_OUTPUT
+
+      - name: 准备构建目录
+        run: |
+          mkdir -p out
+          chmod +x scripts/*.sh
+
+      - name: 构建 ISO (Docker, amd64)
+        if: ${{ github.event.inputs.arch != 'arm64' }}
+        run: |
+          docker build -f Dockerfile.build -t nasos-builder .
+          docker run --rm --privileged \
+            -e ARCH=amd64 \
+            -e ZFS=${{ github.event.inputs.zfs == 'true' && '1' || '0' }} \
+            -v "$PWD/out:/nasos/out" \
+            nasos-builder ./scripts/build-iso.sh
+
+      - name: 构建 ISO (Docker, arm64)
+        if: ${{ github.event.inputs.arch == 'arm64' }}
+        run: |
+          docker build -f Dockerfile.build -t nasos-builder .
+          docker run --rm --privileged \
+            -e ARCH=arm64 \
+            -v "$PWD/out:/nasos/out" \
+            nasos-builder ./scripts/build-iso.sh
+
+      - name: 显示产物
+        run: ls -lh out/
+
+      - name: 上传 ISO 到 Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nasos-iso
+          path: |
+            out/*.iso
+            out/*.sha256
+          retention-days: 30
+
+      - name: 发布 Release (仅 tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/*.iso
+            out/*.sha256
+          name: NasOS ${{ steps.ver.outputs.version }}
+          body: |
+            ## NasOS ${{ steps.ver.outputs.version }}
+
+            开源 NAS 操作系统安装镜像。
+
+            - 架构: x86_64 (Intel / AMD 通用)
+            - 引导: BIOS + UEFI 双支持
+            - 场景: 物理机 / 虚拟机 (VMware / VirtualBox / KVM / Hyper-V) / 自建存储设备
+
+            ### 校验
+            ```bash
+            sha256sum -c nasos-*.iso.sha256
+            ```
+
+            ### 启动
+            写入 U 盘后从 U 盘启动，选择 "NasOS Live" 体验，或 "安装到本机硬盘" 写入磁盘。
+          draft: false
+          prerelease: false
