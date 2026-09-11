@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="FxkFHRAxANdl79dozPCjvm">
+<head data-page-node-id="uX6jw47QDMs5a3afAN1tCZ">
+<meta charset="UTF-8" data-page-node-id="sMpxAGHSfDeEIU49tmfWP9">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="RUeXPKJ4B9ChsrTCHrnGeU">
+<title>NasOS - 开源 NAS 操作系统</title>
+<link rel="stylesheet" href="style.css" data-page-node-id="q0oDrrLkXJYdtrxgGwssHH">
+</head>
+<body data-page-node-id="TjhRR56GeM5PbAYT2yUPSg">
+
+<!-- ============================ 登录遮罩 ============================ -->
+<div id="login" class="login-mask" data-page-node-id="FGLygWzTdhwys8ng9C13Fo">
+  <div class="login-box" data-page-node-id="j9MecnxOzQO6cWg8P27nuI">
+    <div class="login-logo" data-page-node-id="1xJW4AUTNmkiR85Aw0aH4v">
+      <span class="logo-mark" data-page-node-id="OIJioA9dsRXDlLZRyU3unc">N</span>
+      <div data-page-node-id="D4vXelBiGimyChs3n5YZLN">
+        <h1 data-page-node-id="WAMjvFsgLK5U18LJE6ZHWE">NasOS</h1>
+        <p data-page-node-id="MgedcnlmJH0cuH4kA818pG">Open Source NAS Operating System</p>
+      </div>
+    </div>
+    <input class="input" id="login-user" placeholder="用户名" value="admin" autocomplete="off" data-page-node-id="aK5NOO7nQvHh3DqRylFEg2">
+    <input class="input" id="login-pass" type="password" placeholder="密码" value="nasos" data-page-node-id="XzqGBk3YGqmENsBeyJ1T87">
+    <button class="btn btn-primary btn-block" id="login-btn" data-page-node-id="v12FGcnSXyOLxkwIDQK4zq">登 录</button>
+    <p class="login-tip" data-page-node-id="BODEGaPf04rub9tDtNaymK">默认账号 admin / nasos —— 演示环境，任意密码均可进入</p>
+  </div>
+</div>
+
+<!-- ============================ 主体 ============================ -->
+<div id="app" class="hidden" data-page-node-id="TNklojvA3Gcz0MqyxHPTaa">
+
+  <!-- ---------------------- 顶栏 ---------------------- -->
+  <header class="topbar" data-page-node-id="ZdjXv8J9cPEG82mEX3W7JA">
+    <div class="brand" data-page-node-id="BmbkYRRW1ou0HXYodLEha1">
+      <span class="logo-mark sm" data-page-node-id="iKKTNlHajz2Vsg8U3ny1or">N</span>
+      <span class="brand-text" data-page-node-id="ztXf13g1hZw860eDDJfKJM">NasOS</span>
+    </div>
+
+    <div class="topbar-search" data-page-node-id="nCIxsrcDbWXMACWelHfow4">
+      <input class="input" id="global-search" placeholder="搜索功能、应用、设置…" data-page-node-id="xB7IjaGJLvUlohc4VLKuVi">
+    </div>
+
+    <div class="topbar-right" data-page-node-id="23tz3KKAliskxg4MIPx5XM">
+      <span class="badge badge-ok" id="sys-health" data-page-node-id="7JGhAigrW0zbAIUQ4wEJPj">系统正常</span>
+      <span class="topbar-meta" id="topbar-host" data-page-node-id="p673WgsjogONsAqWCnO8JC">nasos</span>
+      <span class="topbar-meta" id="topbar-clock" data-page-node-id="ZlG9Z28enW1UArFuIahCWS">--:--:--</span>
+      <div class="avatar" id="user-menu" data-page-node-id="qesuGOSM11Lc6GUmri1rff">A</div>
+    </div>
+  </header>
+
+  <!-- ---------------------- 侧栏 ---------------------- -->
+  <nav class="sidebar" data-page-node-id="MQdAcgSQRZsAguJLMiex1O">
+    <div class="nav-group" data-page-node-id="BCl5ngcTjS4HQ9GCxZZCvP">
+      <div class="nav-label" data-page-node-id="maukijAM16JVUeqsFng3O5">概览</div>
+      <a class="nav-item active" data-view="dashboard" data-page-node-id="qzhE7Vua1fXHMHaJvTtemE"><span class="ico" data-page-node-id="dE11gmABLwEjNdTM1i8VGI">◧</span>仪表盘</a>
+    </div>
+
+    <div class="nav-group" data-page-node-id="7cDEhmdUauuRtHcM7DpilB">
+      <div class="nav-label" data-page-node-id="29Xuw1X6O8FmvfJF1RVBQA">存储</div>
+      <a class="nav-item" data-view="disks" data-page-node-id="D02lZqw8O5iWczAWIOkIED"><span class="ico" data-page-node-id="22oQz47MyDjpf22Xmk01iB">⛁</span>磁盘管理</a>
+      <a class="nav-item" data-view="pools" data-page-node-id="Flb3d2nbEr3jvgY4UxJ6kl"><span class="ico" data-page-node-id="vPAsD8iRpmATyFL5kilorS">▤</span>存储池</a>
+      <a class="nav-item" data-view="shares" data-page-node-id="sSFkLE68fHFRgtE87ZZ5kb"><span class="ico" data-page-node-id="bXU9mZmso2ws2YB7OSGp4h">⇄</span>共享文件夹</a>
+    </div>
+
+    <div class="nav-group" data-page-node-id="fpTPJ55VJ2teNZnF1KFltL">
+      <div class="nav-label" data-page-node-id="bi6vCqhzZflZYB9LxuAWsb">系统</div>
+      <a class="nav-item" data-view="network" data-page-node-id="qv6V4KQcHEynKIUJkmi42t"><span class="ico" data-page-node-id="cwpco5ojdPsNm2Zxa0FagR">⇅</span>网络</a>
+      <a class="nav-item" data-view="users" data-page-node-id="yC0FdkjSDBcunyALuXcFPm"><span class="ico" data-page-node-id="YtzMW5SjbRzKQczGZEhAuE">☺</span>用户与权限</a>
+      <a class="nav-item" data-view="apps" data-page-node-id="Mh1vpxSNNNZZSz7ZCGp0cO"><span class="ico" data-page-node-id="YOyrGggesSFqZ0XBa2n2WA">◈</span>应用中心</a>
+      <a class="nav-item" data-view="settings" data-page-node-id="Rj6q0Be3mNPuvX4qTnUZn9"><span class="ico" data-page-node-id="YHHD4gsFRCmhpCSXTCGGDz">⚙</span>系统设置</a>
+    </div>
+
+    <div class="sidebar-foot" data-page-node-id="9VrC4uPSqlbd222h7mUjNH">
+      <div class="nav-label" data-page-node-id="BLFnhj5jk73wC8ja5sjXGS">版本</div>
+      <div class="ver" id="side-version" data-page-node-id="1GNSvuIO7s4iGMSIEyvDsx">v0.1.0</div>
+      <div class="ver-sub" id="side-arch" data-page-node-id="aGicMHyxoAt1lrtQMEKF64">x86_64 · Intel/AMD</div>
+    </div>
+  </nav>
+
+  <!-- ---------------------- 内容区 ---------------------- -->
+  <main class="main" id="main" data-page-node-id="J5TbT88srMhGavqIZpgpjh">
+    <!-- 视图由 app.js 渲染 -->
+  </main>
+</div>
+
+<!-- 通用弹窗 -->
+<div id="modal" class="modal-mask hidden" data-page-node-id="jtKVA54YK8zesXwdVStNZD">
+  <div class="modal-box" data-page-node-id="tYF9yDln82NWxdTo7tRyMC">
+    <div class="modal-head" data-page-node-id="3jUpsuxfcoOD5SCKKE38Ra">
+      <h3 id="modal-title" data-page-node-id="KfGHKz6m9g9xiziqlXqxPM">标题</h3>
+      <button class="icon-btn" id="modal-close" data-page-node-id="WmmQqNX1lSoqZ0WDwMr2KG">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body" data-page-node-id="XdvtCd0BmF8ziaoTPPWSKV"></div>
+    <div class="modal-foot" id="modal-foot" data-page-node-id="uAFKdHPQeGcsjImbWa310w"></div>
+  </div>
+</div>
+
+<!-- 轻提示 -->
+<div id="toast" class="toast hidden" data-page-node-id="VBRzFOVisiqORn9rZh6HwJ"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
